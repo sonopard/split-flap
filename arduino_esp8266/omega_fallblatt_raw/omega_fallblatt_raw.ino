@@ -23,8 +23,8 @@ extern "C" {
 
 #define STA_HOSTNAME "flipflap"
 
-const char* ssid = "fablab-wue";
-const char* password = "cwurzdfi";
+const char* ssid = "";
+const char* password = "";
 
 ESP8266WebServer server(80);
 
@@ -99,16 +99,23 @@ void setup() {
   });
 
   server.on("/flap", HTTP_POST, []() {
+    if(fan_mode) return;
     String value = server.arg("value");
     encoder_desired_val = value.toInt() + 1;
     digitalWrite(PIN_TRIAC_N, 0);
   });
 
   server.on("/fan", HTTP_GET, []() {
-    fan_mode = true;
     String value = server.arg("value");
-    fanTicker.once_ms(value.toInt(), stop);
-    digitalWrite(PIN_TRIAC_N, 0);
+    int value_int = value.toInt();
+    if(value == "off") {
+      stop();
+    } else if (value_int > 100 && value_int < 300000) {
+      fan_mode = true;
+      fanTicker.once_ms(value_int, stop);
+      digitalWrite(PIN_TRIAC_N, 0);
+    }
+    server.send(200, "text/json", "{\"status\":\"success\"}");
   });
 
   /*
@@ -234,7 +241,6 @@ void stop() {
 }
 
 void readEncoder() {
-  if(fan_mode) return;
   int prev_val = encoder_val;
   int oneflip = prev_val - 1;
   if (oneflip < 1)
@@ -257,7 +263,7 @@ void readEncoder() {
     return;
   }
 
-  if (encoder_val == encoder_desired_val) {
+  if (!fan_mode && (encoder_val == encoder_desired_val) ){
     digitalWrite(PIN_TRIAC_N, 1);  // stop the motor when we have reached the desired position.
   }
 
