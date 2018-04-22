@@ -23,17 +23,19 @@ extern "C" {
 
 #define STA_HOSTNAME "flipflap"
 
-const char* ssid = "";
-const char* password = "";
+const char* ssid = "fablab-wue";
+const char* password = "cwurzdfi";
 
 ESP8266WebServer server(80);
 
+volatile bool fan_mode = false;
 volatile int read_error_count = 0;
 volatile uint8_t encoder_val = 1; // last read value
 uint8_t encoder_desired_val = 1; // value to stop at
 volatile int strobe_int = 0; // interrupt counter
 bool timer_running = false; // a timer is active, don't start a new one
 Ticker timerReadEncoder;
+Ticker fanTicker;
 
 void setup() {
   Serial.begin(115200);
@@ -101,6 +103,14 @@ void setup() {
     encoder_desired_val = value.toInt() + 1;
     digitalWrite(PIN_TRIAC_N, 0);
   });
+
+  server.on("/fan", HTTP_GET, []() {
+    fan_mode = true;
+    String value = server.arg("value");
+    fanTicker.once_ms(value.toInt(), stop);
+    digitalWrite(PIN_TRIAC_N, 0);
+  });
+
   /*
     server.on("/flapDown", HTTP_POST, []() {
       encoder_desired_val--;
@@ -218,7 +228,13 @@ void sendFlap()
   json = String();
 }
 
+void stop() {
+  fan_mode = false;
+  digitalWrite(PIN_TRIAC_N, 1);  // stop the motor
+}
+
 void readEncoder() {
+  if(fan_mode) return;
   int prev_val = encoder_val;
   int oneflip = prev_val - 1;
   if (oneflip < 1)
